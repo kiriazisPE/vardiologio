@@ -192,7 +192,6 @@ def main():
         schedule, missing_shifts = create_schedule()
         st.success("✅ Το πρόγραμμα δημιουργήθηκε!")
         display_schedule(schedule)
-        ...
         # --- Ημερομηνία βάσης εβδομάδας ---
         st.markdown("#### 🗓️ Ορισμός Ημερολογιακής Εβδομάδας")
         base_date = st.date_input("Επιλέξτε την ημερομηνία Δευτέρας της εβδομάδας", value=datetime.date(2025, 7, 1))
@@ -201,19 +200,20 @@ def main():
         # --- Select Day Calendar-like Filter ---
         st.markdown("#### 🔎 Προβολή Ανά Ημέρα")
         selected_day = st.selectbox("Επιλέξτε Ημέρα", DAYS)
-        day_df = df[df["Ημέρα"] == selected_day]
+        day_df = st.session_state.final_schedule_df[st.session_state.final_schedule_df["Ημέρα"] == selected_day]
         st.dataframe(day_df, use_container_width=True)
 
         # --- Filter by Employee ---
         st.markdown("#### 👤 Φιλτράρισμα Ανά Υπάλληλο")
-        employees = df["Υπάλληλος"].unique().tolist()
+        employees = st.session_state.final_schedule_df["Υπάλληλος"].unique().tolist()
         selected_employee = st.selectbox("Επιλέξτε Υπάλληλο", ["Όλοι"] + employees)
         if selected_employee != "Όλοι":
-            emp_df = df[df["Υπάλληλος"] == selected_employee]
+            emp_df = st.session_state.final_schedule_df[st.session_state.final_schedule_df["Υπάλληλος"] == selected_employee]
             st.dataframe(emp_df, use_container_width=True)
 
         # --- Google Calendar Style Table ---
-        st.markdown("#### 📅 Ημερολογιακή Προβολή")
+        st.markdown("#### 🗕️ Ημερολογιακή Προβολή")
+        df = st.session_state.final_schedule_df.copy()
         df["Ημερομηνία"] = df["Ημέρα"].map(day_dates)
         calendar_view = df.pivot_table(index="Βάρδια", columns="Ημερομηνία", values="Υπάλληλος", aggfunc=lambda x: ", ".join(x))
         st.dataframe(calendar_view.fillna(""), use_container_width=True)
@@ -240,8 +240,10 @@ def main():
                 st.warning(alert)
         else:
             st.success("✅ Δεν εντοπίστηκαν παραβιάσεις στους βασικούς κανόνες ξεκούρασης και ωραρίου.")
-    ...
 
+        # --- Missing Shifts Display ---
         display_missing_shifts(missing_shifts)
+...
+
 
 main()
