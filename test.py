@@ -94,8 +94,9 @@ def show_employees():
                         st.session_state.edit_index = idx
                 with col3:
                     if st.button("🗑️ Διαγραφή", key=f"delete_{idx}"):
-                        del st.session_state.employees[idx]
-                        st.experimental_rerun()
+                         st.session_state.employees.pop(idx)
+                         st.session_state.edit_index = None
+                         st.experimental_rerun()
         else:
             st.info("Δεν έχουν προστεθεί υπάλληλοι.")
 
