@@ -6,7 +6,7 @@ import datetime
 # --- Config ---
 st.set_page_config(page_title="Πρόγραμμα Βαρδιών", layout="centered")
 st.title("📅 Δημιουργία Προγράμματος Βαρδιών")
-st.caption("Απλοποιημένο εργαλείο κατανομής βαρδιών για καταστήματα εστίασης")
+st.caption("Εργαλείο κατανομής βαρδιών σύμφωνα με την ελληνική εργατική νομοθεσία")
 
 # --- Constants ---
 DAYS = ["Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο", "Κυριακή"]
@@ -19,64 +19,95 @@ def init_session():
         st.session_state.employees = []
     if "shift_requirements" not in st.session_state:
         st.session_state.shift_requirements = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    if "active_shifts" not in st.session_state:
+        st.session_state.active_shifts = SHIFTS.copy()
+    if "edit_index" not in st.session_state:
+        st.session_state.edit_index = None
 
-# --- Add employee ---
+# --- Setup Parameters ---
+def setup_parameters():
+    with st.expander("⚙️ Ρυθμίσεις & Κανόνες Λειτουργίας", expanded=True):
+        st.markdown("##### Επιλέξτε ποιες βάρδιες χρησιμοποιεί το κατάστημά σας")
+        selected = st.multiselect("Βάρδιες ανά ημέρα", SHIFTS, default=SHIFTS[:2])
+        st.session_state.active_shifts = selected
+
+# --- Add or Edit employee ---
 def add_employee():
-    with st.expander("➕ Προσθήκη Νέου Υπαλλήλου"):
-        cols = st.columns(2)
-        name = cols[0].text_input("Όνομα Υπαλλήλου")
-        days_off = cols[1].slider("Ρεπό ανά εβδομάδα", 0, 3, 2)
-        roles = st.multiselect("Πόστα που μπορεί να καλύψει", ROLES, default=ROLES)
+    with st.expander("➕ Προσθήκη / Επεξεργασία Υπαλλήλου"):
+        if st.session_state.edit_index is not None:
+            employee = st.session_state.employees[st.session_state.edit_index]
+            name = st.text_input("Όνομα Υπαλλήλου", value=employee["name"])
+            roles = st.multiselect("Ρόλοι (πόστα) που μπορεί να καλύψει", ROLES, default=employee["roles"])
+            days_off = st.slider("Ρεπό ανά εβδομάδα (βάσει νόμου: τουλάχιστον 1)", 1, 3, employee["days_off"])
+        else:
+            name = st.text_input("Όνομα Υπαλλήλου")
+            roles = st.multiselect("Ρόλοι (πόστα) που μπορεί να καλύψει", ROLES, default=ROLES)
+            days_off = st.slider("Ρεπό ανά εβδομάδα (βάσει νόμου: τουλάχιστον 1)", 1, 3, 2)
 
-        st.markdown("**Διαθεσιμότητα ανά ημέρα**")
         availability = {}
+        st.markdown("#### Διαθεσιμότητα ανά ημέρα")
         for day in DAYS:
-            availability[day] = st.multiselect(f"{day}", SHIFTS, default=SHIFTS, key=f"{name}-{day}")
+            default = st.session_state.active_shifts if st.session_state.edit_index is None else employee["availability"].get(day, [])
+            availability[day] = st.multiselect(f"{day}", st.session_state.active_shifts, default=default, key=f"{name}-{day}")
 
-        if st.button("💾 Καταχώρηση Υπαλλήλου") and name:
-            st.session_state.employees.append({
+        if st.button("✅ Αποθήκευση Υπαλλήλου") and name:
+            employee_data = {
                 "name": name,
                 "roles": roles,
                 "days_off": days_off,
                 "availability": availability,
-                "absences": []
-            })
-            st.success(f"Ο υπάλληλος {name} προστέθηκε.")
+                "absences": [],
+                "last_night_shift": None
+            }
+            if st.session_state.edit_index is not None:
+                st.session_state.employees[st.session_state.edit_index] = employee_data
+                st.success(f"Ο υπάλληλος {name} ενημερώθηκε.")
+                st.session_state.edit_index = None
+            else:
+                st.session_state.employees.append(employee_data)
+                st.success(f"Ο υπάλληλος {name} προστέθηκε.")
 
 # --- Define shift requirements ---
 def define_requirements():
-    st.subheader("🔧 Ορισμός Αναγκών Βαρδιών")
-    for day in DAYS:
-        with st.expander(f"📅 {day}"):
-            for shift in SHIFTS:
-                cols = st.columns(len(ROLES))
-                for idx, role in enumerate(ROLES):
-                    key = f"{day}-{shift}-{role}"
-                    val = cols[idx].number_input(f"{shift} - {role}", min_value=0, value=0, step=1, key=key)
-                    st.session_state.shift_requirements[day][shift][role] = val
+    with st.expander("📌 Ορισμός Αναγκών Βαρδιών"):
+        for day in DAYS:
+            with st.expander(f"📅 {day}"):
+                for shift in st.session_state.active_shifts:
+                    cols = st.columns(len(ROLES))
+                    for idx, role in enumerate(ROLES):
+                        key = f"{day}-{shift}-{role}"
+                        val = cols[idx].number_input(f"{shift} - {role}", min_value=0, value=0, step=1, key=key)
+                        st.session_state.shift_requirements[day][shift][role] = val
 
-# --- Display employees ---
+# --- Display employees with Edit/Delete ---
 def show_employees():
-    with st.expander("👥 Λίστα Υπαλλήλων", expanded=True):
+    with st.expander("👥 Προβολή Υπαλλήλων", expanded=True):
         if st.session_state.employees:
-            df = pd.DataFrame([{
-                "Όνομα": e["name"],
-                "Πόστα": ", ".join(e["roles"]),
-                "Ρεπό/εβδ": e["days_off"]
-            } for e in st.session_state.employees])
-            st.dataframe(df, use_container_width=True)
+            for idx, e in enumerate(st.session_state.employees):
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.markdown(f"**{e['name']}** - {', '.join(e['roles'])} | Ρεπό: {e['days_off']}")
+                with col2:
+                    if st.button("✏️ Επεξεργασία", key=f"edit_{idx}"):
+                        st.session_state.edit_index = idx
+                with col3:
+                    if st.button("🗑️ Διαγραφή", key=f"delete_{idx}"):
+                        del st.session_state.employees[idx]
+                        st.experimental_rerun()
         else:
-            st.info("Δεν υπάρχουν ακόμη υπάλληλοι.")
+            st.info("Δεν έχουν προστεθεί υπάλληλοι.")
 
 # --- Schedule creation ---
 def create_schedule():
     schedule = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    work_streak = defaultdict(int)
     employee_work_days = defaultdict(int)
+    employee_last_shift = defaultdict(lambda: {day: None for day in DAYS})
 
     while True:
         completed = True
-        for day in DAYS:
-            for shift in SHIFTS:
+        for i, day in enumerate(DAYS):
+            for shift in st.session_state.active_shifts:
                 for role in ROLES:
                     required = st.session_state.shift_requirements[day][shift][role]
                     assigned_count = sum([1 for names in schedule[day][shift].values() if role in names])
@@ -84,18 +115,29 @@ def create_schedule():
                     if assigned_count < required:
                         for e in st.session_state.employees:
                             name = e["name"]
+
+                            if employee_work_days[name] >= 7 - e["days_off"]:
+                                continue
+                            if work_streak[name] >= 6:
+                                continue
                             if shift not in e["availability"].get(day, []):
                                 continue
                             if role not in e["roles"]:
                                 continue
-                            if employee_work_days[name] >= 7 - e["days_off"]:
-                                continue
+                            if shift == "Πρωί" and i > 0:
+                                prev_day = DAYS[i - 1]
+                                if employee_last_shift[name].get(prev_day) == "Βράδυ":
+                                    continue
+
                             if name not in schedule[day][shift]:
                                 schedule[day][shift][name] = []
                             if role not in schedule[day][shift][name]:
                                 schedule[day][shift][name].append(role)
-                            employee_work_days[name] += 1
-                            break
+                                employee_work_days[name] += 1
+                                work_streak[name] += 1
+                                employee_last_shift[name][day] = shift
+                                break
+
                     assigned_count = sum([1 for names in schedule[day][shift].values() if role in names])
                     if assigned_count < required:
                         completed = False
@@ -107,24 +149,22 @@ def create_schedule():
 def display_schedule(schedule):
     rows = []
     for day in DAYS:
-        for shift in SHIFTS:
+        for shift in st.session_state.active_shifts:
             for name, roles in schedule[day][shift].items():
-                rows.append({"Ημέρα": day, "Βάρδια": shift, "Όνομα": name, "Πόστα": ", ".join(roles)})
+                rows.append({"Ημέρα": day, "Βάρδια": shift, "Υπάλληλος": name, "Καθήκοντα": ", ".join(roles)})
     df = pd.DataFrame(rows)
-    st.subheader("📆 Τελικό Πρόγραμμα Βαρδιών")
+    st.markdown("### 📆 Πρόγραμμα Εβδομάδας")
     st.dataframe(df, use_container_width=True)
 
 # --- Main ---
 def main():
     init_session()
-    st.markdown("---")
+    setup_parameters()
     add_employee()
-    st.markdown("---")
     define_requirements()
-    st.markdown("---")
     show_employees()
 
-    if st.button("🚀 Δημιουργία Προγράμματος", use_container_width=True):
+    if st.button("🧠 Δημιουργία Προγράμματος", use_container_width=True):
         schedule = create_schedule()
         st.success("✅ Το πρόγραμμα δημιουργήθηκε!")
         display_schedule(schedule)
