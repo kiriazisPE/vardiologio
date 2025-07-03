@@ -100,6 +100,7 @@ def show_employees():
 # --- Schedule creation ---
 def create_schedule():
     schedule = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    missing_shifts = []
     work_streak = defaultdict(int)
     employee_work_days = defaultdict(int)
     employee_last_shift = defaultdict(lambda: {day: None for day in DAYS})
@@ -141,9 +142,10 @@ def create_schedule():
                     assigned_count = sum([1 for names in schedule[day][shift].values() if role in names])
                     if assigned_count < required:
                         completed = False
+                        missing_shifts.append({"Ημέρα": day, "Βάρδια": shift, "Ρόλος": role, "Λείπουν": required - assigned_count})
         if completed:
             break
-    return schedule
+    return schedule, missing_shifts
 
 # --- Display schedule ---
 def display_schedule(schedule):
@@ -156,6 +158,15 @@ def display_schedule(schedule):
     st.markdown("### 📆 Πρόγραμμα Εβδομάδας")
     st.dataframe(df, use_container_width=True)
 
+# --- Display missing shift report ---
+def display_missing_shifts(missing_shifts):
+    if missing_shifts:
+        df = pd.DataFrame(missing_shifts)
+        st.markdown("### ⚠️ Μη Καλυμμένες Βάρδιες")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.success("🎉 Όλες οι βάρδιες καλύφθηκαν επιτυχώς!")
+
 # --- Main ---
 def main():
     init_session()
@@ -165,8 +176,9 @@ def main():
     show_employees()
 
     if st.button("🧠 Δημιουργία Προγράμματος", use_container_width=True):
-        schedule = create_schedule()
+        schedule, missing_shifts = create_schedule()
         st.success("✅ Το πρόγραμμα δημιουργήθηκε!")
         display_schedule(schedule)
+        display_missing_shifts(missing_shifts)
 
 main()
