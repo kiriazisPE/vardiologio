@@ -23,6 +23,8 @@ def init_session():
         st.session_state.active_shifts = SHIFTS.copy()
     if "edit_index" not in st.session_state:
         st.session_state.edit_index = None
+    if "final_schedule_df" not in st.session_state:
+        st.session_state.final_schedule_df = pd.DataFrame()
 
 # --- Setup Parameters ---
 def setup_parameters():
@@ -155,8 +157,19 @@ def display_schedule(schedule):
             for name, roles in schedule[day][shift].items():
                 rows.append({"Ημέρα": day, "Βάρδια": shift, "Υπάλληλος": name, "Καθήκοντα": ", ".join(roles)})
     df = pd.DataFrame(rows)
+    st.session_state.final_schedule_df = df
     st.markdown("### 📆 Πρόγραμμα Εβδομάδας")
     st.dataframe(df, use_container_width=True)
+
+    # --- Export to CSV ---
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button("📥 Εξαγωγή σε CSV", data=csv, file_name="programma_vardion.csv", mime="text/csv")
+
+    # --- Select Day Calendar-like Filter ---
+    st.markdown("#### 🔎 Προβολή Ανά Ημέρα")
+    selected_day = st.selectbox("Επιλέξτε Ημέρα", DAYS)
+    day_df = df[df["Ημέρα"] == selected_day]
+    st.dataframe(day_df, use_container_width=True)
 
 # --- Display missing shift report ---
 def display_missing_shifts(missing_shifts):
