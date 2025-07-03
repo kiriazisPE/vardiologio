@@ -36,15 +36,20 @@ def setup_parameters():
 # --- Add or Edit employee ---
 def add_employee():
     with st.expander("➕ Προσθήκη / Επεξεργασία Υπαλλήλου"):
-        if st.session_state.edit_index is not None:
+        if (
+            st.session_state.edit_index is not None
+            and 0 <= st.session_state.edit_index < len(st.session_state.employees)
+        ):
             employee = st.session_state.employees[st.session_state.edit_index]
             name = st.text_input("Όνομα Υπαλλήλου", value=employee["name"])
             roles = st.multiselect("Ρόλοι (πόστα) που μπορεί να καλύψει", ROLES, default=employee["roles"])
             days_off = st.slider("Ρεπό ανά εβδομάδα (βάσει νόμου: τουλάχιστον 1)", 1, 3, employee["days_off"])
         else:
+            st.session_state.edit_index = None  # reset index αν είναι άκυρο
             name = st.text_input("Όνομα Υπαλλήλου")
             roles = st.multiselect("Ρόλοι (πόστα) που μπορεί να καλύψει", ROLES, default=ROLES)
             days_off = st.slider("Ρεπό ανά εβδομάδα (βάσει νόμου: τουλάχιστον 1)", 1, 3, 2)
+
 
         availability = {}
         st.markdown("#### Διαθεσιμότητα ανά ημέρα")
