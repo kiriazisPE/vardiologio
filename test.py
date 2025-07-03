@@ -192,6 +192,56 @@ def main():
         schedule, missing_shifts = create_schedule()
         st.success("✅ Το πρόγραμμα δημιουργήθηκε!")
         display_schedule(schedule)
+        ...
+        # --- Ημερομηνία βάσης εβδομάδας ---
+        st.markdown("#### 🗓️ Ορισμός Ημερολογιακής Εβδομάδας")
+        base_date = st.date_input("Επιλέξτε την ημερομηνία Δευτέρας της εβδομάδας", value=datetime.date(2025, 7, 1))
+        day_dates = {day: base_date + datetime.timedelta(days=i) for i, day in enumerate(DAYS)}
+
+        # --- Select Day Calendar-like Filter ---
+        st.markdown("#### 🔎 Προβολή Ανά Ημέρα")
+        selected_day = st.selectbox("Επιλέξτε Ημέρα", DAYS)
+        day_df = df[df["Ημέρα"] == selected_day]
+        st.dataframe(day_df, use_container_width=True)
+
+        # --- Filter by Employee ---
+        st.markdown("#### 👤 Φιλτράρισμα Ανά Υπάλληλο")
+        employees = df["Υπάλληλος"].unique().tolist()
+        selected_employee = st.selectbox("Επιλέξτε Υπάλληλο", ["Όλοι"] + employees)
+        if selected_employee != "Όλοι":
+            emp_df = df[df["Υπάλληλος"] == selected_employee]
+            st.dataframe(emp_df, use_container_width=True)
+
+        # --- Google Calendar Style Table ---
+        st.markdown("#### 📅 Ημερολογιακή Προβολή")
+        df["Ημερομηνία"] = df["Ημέρα"].map(day_dates)
+        calendar_view = df.pivot_table(index="Βάρδια", columns="Ημερομηνία", values="Υπάλληλος", aggfunc=lambda x: ", ".join(x))
+        st.dataframe(calendar_view.fillna(""), use_container_width=True)
+
+        # --- Νόμιμος Έλεγχος Υπερβάσεων ---
+        st.markdown("#### 🔔 Ειδοποιήσεις Παραβίασης Κανόνων")
+        alerts = []
+        work_hours = df.groupby("Υπάλληλος").size() * 8  # υποθέτουμε 8 ώρες/βάρδια
+        for name, total_hours in work_hours.items():
+            if total_hours > 48:
+                alerts.append(f"⚠️ Ο υπάλληλος **{name}** ξεπερνά τις 48 ώρες/εβδομάδα (={total_hours} ώρες)")
+
+        rest_violations = []
+        for name in df["Υπάλληλος"].unique():
+            emp_days = df[df["Υπάλληλος"] == name].sort_values("Ημερομηνία")
+            previous_day = None
+            for _, row in emp_days.iterrows():
+                if previous_day and (row["Ημερομηνία"] - previous_day).days == 1:
+                    rest_violations.append(f"⚠️ Ο υπάλληλος **{name}** δουλεύει συνεχόμενες μέρες χωρίς ρεπό.")
+                previous_day = row["Ημερομηνία"]
+
+        if alerts or rest_violations:
+            for alert in set(alerts + rest_violations):
+                st.warning(alert)
+        else:
+            st.success("✅ Δεν εντοπίστηκαν παραβιάσεις στους βασικούς κανόνες ξεκούρασης και ωραρίου.")
+    ...
+
         display_missing_shifts(missing_shifts)
 
 main()
