@@ -45,11 +45,10 @@ def add_employee():
             roles = st.multiselect("Ρόλοι (πόστα) που μπορεί να καλύψει", ROLES, default=employee["roles"])
             days_off = st.slider("Ρεπό ανά εβδομάδα (βάσει νόμου: τουλάχιστον 1)", 1, 3, employee["days_off"])
         else:
-            st.session_state.edit_index = None  # reset index αν είναι άκυρο
+            st.session_state.edit_index = None
             name = st.text_input("Όνομα Υπαλλήλου")
             roles = st.multiselect("Ρόλοι (πόστα) που μπορεί να καλύψει", ROLES, default=ROLES)
             days_off = st.slider("Ρεπό ανά εβδομάδα (βάσει νόμου: τουλάχιστον 1)", 1, 3, 2)
-
 
         availability = {}
         st.markdown("#### Διαθεσιμότητα ανά ημέρα")
@@ -99,11 +98,12 @@ def show_employees():
                         st.session_state.edit_index = idx
                 with col3:
                     if st.button("🗑️ Διαγραφή", key=f"delete_{idx}"):
-                         st.session_state.employees.pop(idx)
-                         st.session_state.edit_index = None
-                         st.experimental_rerun()
+                        st.session_state.employees.pop(idx)
+                        st.session_state.edit_index = None
+                        st.experimental_rerun()
         else:
             st.info("Δεν έχουν προστεθεί υπάλληλοι.")
+
 # --- Schedule creation ---
 def create_schedule():
     schedule = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
@@ -170,12 +170,6 @@ def display_schedule(schedule):
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("📥 Εξαγωγή σε CSV", data=csv, file_name="programma_vardion.csv", mime="text/csv")
 
-    # --- Select Day Calendar-like Filter ---
-    st.markdown("#### 🔎 Προβολή Ανά Ημέρα")
-    selected_day = st.selectbox("Επιλέξτε Ημέρα", DAYS)
-    day_df = df[df["Ημέρα"] == selected_day]
-    st.dataframe(day_df, use_container_width=True)
-
 # --- Display missing shift report ---
 def display_missing_shifts(missing_shifts):
     if missing_shifts:
@@ -199,23 +193,19 @@ def main():
         display_schedule(schedule)
         display_missing_shifts(missing_shifts)
 
-    # Αν δεν υπάρχει πρόγραμμα, βγάζουμε προειδοποίηση
     if st.session_state.final_schedule_df.empty:
         st.warning("⚠️ Δεν υπάρχει πρόγραμμα για προβολή. Δημιουργήστε πρώτα ένα.")
         return
 
-    # --- Ημερομηνία βάσης εβδομάδας ---
     st.markdown("#### 🗓️ Ορισμός Ημερολογιακής Εβδομάδας")
     base_date = st.date_input("Επιλέξτε την ημερομηνία Δευτέρας της εβδομάδας", value=datetime.date(2025, 7, 1))
     day_dates = {day: base_date + datetime.timedelta(days=i) for i, day in enumerate(DAYS)}
 
-    # --- Προβολή ανά ημέρα ---
     st.markdown("#### 🔎 Προβολή Ανά Ημέρα")
     selected_day = st.selectbox("Επιλέξτε Ημέρα", DAYS)
     day_df = st.session_state.final_schedule_df[st.session_state.final_schedule_df["Ημέρα"] == selected_day]
     st.dataframe(day_df, use_container_width=True)
 
-    # --- Φιλτράρισμα ανά υπάλληλο ---
     st.markdown("#### 👤 Φιλτράρισμα Ανά Υπάλληλο")
     employees = st.session_state.final_schedule_df["Υπάλληλος"].unique().tolist()
     selected_employee = st.selectbox("Επιλέξτε Υπάλληλο", ["Όλοι"] + employees)
@@ -223,17 +213,15 @@ def main():
         emp_df = st.session_state.final_schedule_df[st.session_state.final_schedule_df["Υπάλληλος"] == selected_employee]
         st.dataframe(emp_df, use_container_width=True)
 
-    # --- Ημερολογιακή Προβολή τύπου Google Calendar ---
     st.markdown("#### 🗓️ Ημερολογιακή Προβολή")
     df = st.session_state.final_schedule_df.copy()
     df["Ημερομηνία"] = df["Ημέρα"].map(day_dates)
     calendar_view = df.pivot_table(index="Βάρδια", columns="Ημερομηνία", values="Υπάλληλος", aggfunc=lambda x: ", ".join(x))
     st.dataframe(calendar_view.fillna(""), use_container_width=True)
 
-    # --- Νόμιμος Έλεγχος Υπερβάσεων ---
     st.markdown("#### 🔔 Ειδοποιήσεις Παραβίασης Κανόνων")
     alerts = []
-    work_hours = df.groupby("Υπάλληλος").size() * 8  # υποθέτουμε 8 ώρες/βάρδια
+    work_hours = df.groupby("Υπάλληλος").size() * 8
     for name, total_hours in work_hours.items():
         if total_hours > 48:
             alerts.append(f"⚠️ Ο υπάλληλος **{name}** ξεπερνά τις 48 ώρες/εβδομάδα (={total_hours} ώρες)")
@@ -252,7 +240,5 @@ def main():
             st.warning(alert)
     else:
         st.success("✅ Δεν εντοπίστηκαν παραβιάσεις στους βασικούς κανόνες ξεκούρασης και ωραρίου.")
-
-
 
 main()
